@@ -1,5 +1,7 @@
 # Datasets
 import random
+import medmnist
+from medmnist import INFO, Evaluator
 
 import numpy as np
 import torch
@@ -237,6 +239,29 @@ def train_memory_cifar(root_dir, cifar100, transform_name, batch_size=128, worke
         if with_val:
             val_memory_dataset = datasets.CIFAR10(root=root_dir, train=False,
                                                   download=True, transform=transform_test)
+
+    train_memory_loader = torch.utils.data.DataLoader(
+        train_memory_dataset, batch_size=batch_size, shuffle=False,
+        num_workers=workers, pin_memory=True, drop_last=False)
+
+    if with_val:
+        val_memory_loader = torch.utils.data.DataLoader(
+            val_memory_dataset, batch_size=batch_size, shuffle=False,
+            num_workers=workers, pin_memory=True, drop_last=False)
+        return train_memory_dataset, train_memory_loader, val_memory_dataset, val_memory_loader
+    else:
+        return train_memory_dataset, train_memory_loader
+
+
+def train_memory_medmnist(dataname, transform_name, batch_size=128, workers=2, with_val=False):
+    # Note that CLD uses the same normalization for CIFAR 10 and CIFAR 100
+
+    transform_test = get_transform(transform_name)
+    info = INFO[dataname]
+    DataClass = getattr(medmnist, info['python_class'])
+    train_memory_dataset =  DataClass(split='train', transform=transform_test, download=True)
+    if with_val:
+        val_memory_dataset = DataClass(split='train+val', transform=transform_test, download=True)
 
     train_memory_loader = torch.utils.data.DataLoader(
         train_memory_dataset, batch_size=batch_size, shuffle=False,

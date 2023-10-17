@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 import collections
-from torch._six import string_classes
+# from torch._six import string_classes
 
 # Credit to PAWS: https://github.com/facebookresearch/suncet/blob/main/src/losses.py
 def sharpen(p, T):  # T: sharpen temperature
@@ -306,7 +306,8 @@ def collate_custom(batch):
     elif isinstance(batch[0], float):
         return torch.FloatTensor(batch)
 
-    elif isinstance(batch[0], string_classes):
+    # elif isinstance(batch[0], string_classes):
+    elif isinstance(batch[0], str):
         return batch
 
     elif isinstance(batch[0], collections.Mapping):

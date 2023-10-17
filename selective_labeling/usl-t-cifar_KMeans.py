@@ -57,7 +57,7 @@ nheads = 3
 num_labeled = cfg.USLT.NUM_SELECTED_SAMPLES
 
 backbone = resnet_cifar.__dict__[cfg.MODEL.ARCH]()
-model = ClusteringModel(backbone, nclusters=num_labeled, nheads=nheads, backbone_dim=cfg.MODEL.BACKBONE_DIM).cuda()
+model = ClusteringModel(backbone, nclusters=num_classes, nheads=nheads, backbone_dim=cfg.MODEL.BACKBONE_DIM).cuda()
 model.load_state_dict(utils.single_model(checkpoint["model"]))
 model.eval()
 
@@ -80,6 +80,7 @@ all_max_probs_list = [all_probs.max(dim=1).values for all_probs in all_probs_lis
 head_in_use = cfg.USLT.HEAD_IN_USE
 all_max_probs_mean = torch.stack(all_max_probs_list, dim=0).mean(dim=0)
 max_probs_in_use = all_max_probs_mean if cfg.USLT.USE_MEAN_PROB else all_max_probs_list[head_in_use]
+
 
 #%%
 def get_n_correct(all_preds, all_targets, num_labeled, num_classes):
@@ -104,15 +105,25 @@ def get_dist(selected_inds, num_classes):
 #%%
 def get_selection_fn(final_sample_num):
     selected_inds = []
+    num_per_class = int(final_sample_num/num_classes)
     # Max prob stratified (head `head_in_use`)
-    for i in range(final_sample_num):
+    for i in range(num_classes):
         labeled_i_mask = all_preds_list[head_in_use] == i
-        index_within_cluster = max_probs_in_use[labeled_i_mask].argmax()
+        feats_list_i = feats_list[labeled_i_mask]
+        cluster_labels_k, centroids_k = utils.run_kMeans(feats_list_i, num_per_class, num_per_class, Niter=200,
+                                                        recompute=recompute_num_dependent, seed=3, force_no_lazy_tensor=True)
         indices = torch.where(labeled_i_mask)[0]
-        
-        current_select = indices[index_within_cluster]
-        current_select = current_select.item()
-        selected_inds.append(current_select)
+        index_within_cluster = max_probs_in_use[labeled_i_mask]
+
+
+        for k in range(num_per_class):
+            per_class_mask = cluster_labels_k == k
+            index_within_cluster_k = index_within_cluster[per_class_mask].argmax()
+            index_within_kmeans = torch.where(per_class_mask)[0]
+            select_each_class = index_within_kmeans[index_within_cluster_k]
+            current_select = indices[select_each_class]
+            current_select = current_select.item()
+            selected_inds.append(current_select)
 
     return selected_inds
 

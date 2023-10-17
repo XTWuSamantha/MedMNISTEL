@@ -150,6 +150,7 @@ class ResNet(nn.Module):
         if two_branch:
             out_2 = self.groupDis(out_)
             return out, out_2
+        # print(out)
         return out
 
 

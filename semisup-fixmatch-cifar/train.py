@@ -6,6 +6,8 @@ import random
 import shutil
 import time
 from collections import OrderedDict
+import medmnist
+from medmnist import INFO, Evaluator
 
 import numpy as np
 import torch
@@ -16,6 +18,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+
 
 from dataset import DATASET_GETTERS
 from utils import AverageMeter, accuracy
@@ -72,8 +75,10 @@ def main():
     parser.add_argument('--num-workers', type=int, default=4,
                         help='number of workers')
     parser.add_argument('--dataset', default='cifar10', type=str,
-                        choices=['cifar10', 'cifar10_cld_aug', 'cifar100'],
+                        choices=['cifar10', 'cifar10_cld_aug', 'cifar100','MedMNIST'],
                         help='dataset name')
+    parser.add_argument('--MedMNIST', default='medmnist', type=str,
+                        help='The specific dataset of MedMNIST')
     parser.add_argument('--num-labeled', type=int, default=4000,
                         help='number of labeled data')
     parser.add_argument("--expand-labels", action="store_true",
@@ -213,9 +218,10 @@ def main():
             args.model_cardinality = 8
             args.model_depth = 29
             args.model_width = 64
-
-    elif args.dataset == 'bloodmnist':
-        args.num_classes = 8
+    
+    elif args.dataset == 'MedMNIST':
+        info = INFO[args.MedMNIST]
+        args.num_classes = len(info['label'])
         if args.arch == 'wideresnet':
             args.model_depth = 28
             args.model_width = 2
@@ -230,8 +236,10 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()
 
+    # labeled_dataset, unlabeled_dataset, test_dataset = DATASET_GETTERS[args.dataset](
+    #     args, '../data')
     labeled_dataset, unlabeled_dataset, test_dataset = DATASET_GETTERS[args.dataset](
-        args, '../data')
+        args)
 
     if args.local_rank == 0:
         torch.distributed.barrier()
@@ -348,16 +356,34 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
                          disable=args.local_rank not in [-1, 0])
         for batch_idx in range(args.eval_step):
             try:
-                inputs_x, targets_x = labeled_iter.next()
+                # inputs_x, targets_x = labeled_iter.next()
+                inputs_x, targets_x = next(labeled_iter)
+                target = []
+                n = targets_x.numpy()
+                for t in range(len(n)):
+                    target = np.append(target,n[t])
+                targetnp = target.astype(int)
+                targets_x = torch.tensor(targetnp)
+
             except:
                 labeled_iter = iter(labeled_trainloader)
-                inputs_x, targets_x = labeled_iter.next()
+                # inputs_x, targets_x = labeled_iter.next()
+                inputs_x, targets_x = next(labeled_iter)
+                target = []
+                n = targets_x.numpy()
+                for t in range(len(n)):
+                    target = np.append(target,n[t])
+                targetnp = target.astype(int)
+                targets_x = torch.tensor(targetnp)
 
             try:
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                # (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                (inputs_u_w, inputs_u_s), _ = next(unlabeled_iter)
+
             except:
                 unlabeled_iter = iter(unlabeled_trainloader)
-                (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                # (inputs_u_w, inputs_u_s), _ = unlabeled_iter.next()
+                (inputs_u_w, inputs_u_s), _ = next(unlabeled_iter)
 
             with torch.cuda.amp.autocast(enabled=args.amp):
                 data_time.update(time.time() - end)
@@ -485,6 +511,12 @@ def test(args, test_loader, model, epoch):
             model.eval()
 
             inputs = inputs.to(args.device)
+            target = []
+            n = targets.numpy()
+            for t in range(len(n)):
+                target = np.append(target,n[t])
+            targetnp = target.astype(int)
+            targets = torch.tensor(targetnp)         
             targets = targets.to(args.device)
             outputs = model(inputs)
             loss = F.cross_entropy(outputs, targets)

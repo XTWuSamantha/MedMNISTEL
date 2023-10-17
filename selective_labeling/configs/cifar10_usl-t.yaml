@@ -9,4 +9,4 @@ MODEL:
   PRETRAIN_PATH: '../usl-t_pretraining/saved/cifar10/checkpoint.pth'
 
 USLT:
-  NUM_SELECTED_SAMPLES: 40
+  NUM_SELECTED_SAMPLES: 20

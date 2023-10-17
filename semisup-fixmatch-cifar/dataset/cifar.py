@@ -1,5 +1,7 @@
 import logging
 import math
+import medmnist
+from medmnist import INFO, Evaluator
 
 import numpy as np
 from PIL import Image
@@ -7,6 +9,7 @@ from torchvision import datasets
 from torchvision import transforms
 from . import cifar10_inds
 from . import cifar100_inds
+from . import MedMNIST_inds
 from .randaugment import RandAugmentMC
 
 logger = logging.getLogger(__name__)
@@ -118,6 +121,51 @@ def get_cifar100(args, root, force_no_expand=False):
 
     return train_labeled_dataset, train_unlabeled_dataset, test_dataset
 
+
+def get_medmnist(args,force_no_expand=False):
+    transform_labeled = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(size=28,
+                              padding=int(28*0.125),
+                              padding_mode='reflect'),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=normal_mean, std=normal_std)
+    ])
+
+    transform_val = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=normal_mean, std=normal_std)
+    ])
+
+    info = INFO[args.MedMNIST]
+    DataClass = getattr(medmnist, info['python_class'])
+    base_dataset =  DataClass(split='train', download=True)
+
+    # base_dataset = datasets.CIFAR10(root, train=True, download=True)
+    # targets = np.load("/data/UnsupervisedSelectiveLabeling/semisup-fixmatch-cifar/target/DermaMNIST_target.npy")
+
+    # 这里的target是个问题，还有x_u_split/MedMNIST没改完
+    # train_labeled_idxs, train_unlabeled_idxs = x_u_split(
+    #     args, base_dataset.targets, force_no_expand=force_no_expand)
+    train_labeled_idxs, train_unlabeled_idxs = x_u_split(
+        args, base_dataset.labels, force_no_expand=force_no_expand)
+
+    train_labeled_dataset = MedMNISTSSL(
+        train_labeled_idxs, split='train',
+        transform=transform_labeled)
+
+    train_unlabeled_dataset = MedMNISTSSL(
+        train_unlabeled_idxs, split='train',
+        transform=MedTransformFixMatch(mean=normal_mean, std=normal_std))
+    
+    test_dataset = DataClass(split='train', transform=transform_val,  download=False)
+
+    # test_dataset = datasets.CIFAR10(
+    #     root, train=False, transform=transform_val, download=False)
+
+    return train_labeled_dataset, train_unlabeled_dataset, test_dataset
+
+
 def get_labeled_inds(args, labels):
     print("Get sliced labels")
     seed = int(args.get_labeled_inds.split("slice")[1])
@@ -153,6 +201,8 @@ def x_u_split(args, labels, force_no_expand=False):
             labeled_idx = cifar10_inds.get_labeled_inds_select(args, labels, args.get_labeled_inds)
         elif args.dataset == "cifar100":
             labeled_idx = cifar100_inds.get_labeled_inds_select(args, labels, args.get_labeled_inds)
+        elif args.dataset == "MedMNIST":
+            labeled_idx = MedMNIST_inds.get_labeled_inds_select(args, labels, args.get_labeled_inds)
     else:
         raise ValueError("get_labeled_inds not in type")
 
@@ -193,6 +243,28 @@ class TransformFixMatch(object):
         strong = self.strong(x)
         return self.normalize(weak), self.normalize(strong)
 
+class MedTransformFixMatch(object):
+    def __init__(self, mean, std):
+        self.weak = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(size=28,
+                                  padding=int(32*0.125),
+                                  padding_mode='reflect')])
+        self.strong = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(size=28,
+                                  padding=int(32*0.125),
+                                  padding_mode='reflect'),
+            RandAugmentMC(n=2, m=10)])
+        self.normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)])
+
+    def __call__(self, x):
+        weak = self.weak(x)
+        strong = self.strong(x)
+        return self.normalize(weak), self.normalize(strong)
+
 
 class CIFAR10SSL(datasets.CIFAR10):
     def __init__(self, root, indexs, train=True,
@@ -208,6 +280,35 @@ class CIFAR10SSL(datasets.CIFAR10):
 
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
+        img = Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+
+
+info = INFO["bloodmnist"]
+DataClass = getattr(medmnist, info['python_class'])
+
+
+class MedMNISTSSL(DataClass):
+    def __init__(self, indexs, split="train",
+                 transform=None, target_transform=None,
+                 download=False):
+        super().__init__(split=split,
+                         transform=transform,
+                         target_transform=target_transform,
+                         download=download)
+        if indexs is not None:
+            self.imgs = self.imgs[indexs]
+            self.labels = np.array(self.labels)[indexs]
+
+    def __getitem__(self, index):
+        img, target = self.imgs[index], self.labels[index]
         img = Image.fromarray(img)
 
         if self.transform is not None:
@@ -246,4 +347,5 @@ class CIFAR100SSL(datasets.CIFAR100):
 
 DATASET_GETTERS = {'cifar10': get_cifar10,
                    'cifar100': get_cifar100,
-                   'cifar10_cld_aug': get_cifar10_cld_aug}
+                   'cifar10_cld_aug': get_cifar10_cld_aug,
+                   'MedMNIST':get_medmnist}

@@ -1,0 +1,18 @@
+RUN_NAME: 'dermaMNIST_usl'
+
+SKIP_SAVE: False
+RECOMPUTE_ALL: True
+RECOMPUTE_NUM_DEP: True
+
+DATASET:
+  NAME: 'dermamnist'
+  TRANSFORM_NAME: 'medMNIST'
+
+MODEL:
+  ARCH: 'resnet18'
+  PRETRAIN_PATH: 'pretrained/moco_DermaMNIST.pth.tar'
+
+USL:
+  NUM_SELECTED_SAMPLES: 40
+  KNN_K: 400
+  SEEDS: [1, 2, 3, 4, 5]

@@ -3,12 +3,16 @@ import os
 os.environ["USL_MODE"] = "USL"
 
 import numpy as np
+import tqdm
 import torch
 import models.resnet_cifar_cld as resnet_cifar_cld
+import models.resnet_medmnist as resnet_medmnist
 import utils
 from utils import cfg, logger, print_b
+import medmnist
+from medmnist import INFO, Evaluator
 
-utils.init(default_config_file="configs/cifar10_usl.yaml")
+utils.init(default_config_file="configs/BloodMNIST_usl.yaml")
 
 logger.info(cfg)
 
@@ -17,25 +21,42 @@ print_b("Loading model")
 
 checkpoint = torch.load(cfg.MODEL.PRETRAIN_PATH)
 
-model = resnet_cifar_cld.__dict__[cfg.MODEL.ARCH](
-    low_dim=128, pool_len=4, normlinear=True).cuda()
-model.load_state_dict(utils.single_model(checkpoint["model"]))
+model = resnet_medmnist.__dict__[cfg.MODEL.ARCH]().cuda()
+state_dict = utils.single_model(checkpoint["state_dict"])
+for k in list(state_dict.keys()):
+    if k.startswith('encoder_k'):
+        del state_dict[k]
+state_dict = {k.replace("encoder_q.", ""): v for k, v in state_dict.items()}
+state_dict = {k.replace("fc.2.", "fc.1."): v for k, v in state_dict.items()}
+
+mismatch = model.load_state_dict(state_dict, strict=False)
+
+logger.warning(
+    f"Key mismatches: {mismatch} (extra contrastive keys are intended)")
+
 model.eval()
 
 # %%
 print_b("Loading dataset")
-assert cfg.DATASET.NAME in [
-    "cifar10", "cifar100"], f"{cfg.DATASET.NAME} is not cifar10 or cifar100"
-cifar100 = cfg.DATASET.NAME == "cifar100"
-num_classes = 100 if cifar100 else 10
+info = INFO[cfg.DATASET.NAME]
+num_classes = len(info['label'])
 
-train_memory_dataset, train_memory_loader = utils.train_memory_cifar(
-    root_dir=cfg.DATASET.ROOT_DIR,
+
+train_memory_dataset, train_memory_loader = utils.train_memory_medmnist(
+    dataname = cfg.DATASET.NAME,
     batch_size=cfg.DATALOADER.BATCH_SIZE,
-    workers=cfg.DATALOADER.WORKERS, transform_name=cfg.DATASET.TRANSFORM_NAME, cifar100=cifar100)
+    workers=cfg.DATALOADER.WORKERS, transform_name=cfg.DATASET.TRANSFORM_NAME)
 
-targets = torch.tensor(train_memory_dataset.targets)
-targets.shape
+target = []
+for i in train_memory_loader:
+    temp = i[1]
+    n = temp.numpy()
+    for t in range(len(n)):
+        target = np.append(target,n[t])
+targetnp = target.astype(int)
+# np.save('DermaMNIST_target.npy', target)
+target = torch.tensor(targetnp)
+
 
 # %%
 print_b("Loading feat list")
@@ -74,7 +95,7 @@ for kMeans_seed in cfg.USL.SEEDS:
     selected_inds = utils.get_selection(utils.get_selection_with_reg, feats_list, neighbors_dist, cluster_labels, num_centroids, final_sample_num=final_sample_num, iters=cfg.USL.REG.NITERS, w=cfg.USL.REG.W,
                                         momentum=cfg.USL.REG.MOMENTUM, horizon_dist=cfg.USL.REG.HORIZON_DIST, alpha=cfg.USL.REG.ALPHA, verbose=True, seed=kMeans_seed, recompute=recompute_num_dependent, save=True)
 
-    counts = np.bincount(np.array(train_memory_dataset.targets)[selected_inds])
+    counts = np.bincount(targetnp[selected_inds])
 
     print("Class counts:", sum(counts > 0))
     print(counts.tolist())

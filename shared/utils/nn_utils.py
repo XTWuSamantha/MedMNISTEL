@@ -98,7 +98,8 @@ normalization_kwargs_dict = {
     "SCAN-cifar100": dict(mean=(0.5071, 0.4867, 0.4408), std=(0.2675, 0.2565, 0.2761)),
 
     "imagenet": dict(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    "imagenet100": dict(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    "imagenet100": dict(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    "medMNIST": dict(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
 }
 
 
@@ -158,11 +159,11 @@ def get_feats_list(model, train_memory_loader, CLIP=False, feat_dim=None, recomp
                         feat = model_parallel(
                             images, get_low_dim_feat=True, **kwargs).cpu().numpy()
                 feats_list[ptr:ptr + images.size(0)] = feat
-                targets_list[ptr:ptr + images.size(0)] = targets.numpy()
+                # targets_list[ptr:ptr + images.size(0)] = targets.numpy()
                 ptr += images.size(0)
 
-        assert np.all(targets_list == np.array(
-            train_memory_loader.dataset.targets))
+        # assert np.all(targets_list == np.array(
+        #     train_memory_loader.dataset.targets))
         save_npy("memory_feats_list.npy", feats_list)
     else:
         feats_list = load_npy("memory_feats_list.npy")
