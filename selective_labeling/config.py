@@ -43,7 +43,7 @@ if mode == "USL":
     _C.USL.REG.NITERS = 10
     # W is the lambda in math expressions
     _C.USL.REG.W = 0.5
-    _C.USL.REG.MOMENTUM = 0.9
+    _C.USL.REG.MOMENTUM = 0.5
     _C.USL.REG.HORIZON_DIST = 4
     _C.USL.REG.ALPHA = 0.5
     _C.USL.REG.HORIZON_NUM = 128

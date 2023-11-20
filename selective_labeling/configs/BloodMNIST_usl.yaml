@@ -10,9 +10,9 @@ DATASET:
 
 MODEL:
   ARCH: 'resnet18'
-  PRETRAIN_PATH: 'pretrained/moco_BloodMNIST.pth.tar'
+  PRETRAIN_PATH: 'pretrained/spice_BloodMNIST.pth.tar'
 
 USL:
-  NUM_SELECTED_SAMPLES: 10
-  KNN_K: 400
+  NUM_SELECTED_SAMPLES: 16
+  KNN_K: 100
   SEEDS: [1, 2, 3, 4, 5]

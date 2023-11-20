@@ -22,12 +22,18 @@ print_b("Loading model")
 checkpoint = torch.load(cfg.MODEL.PRETRAIN_PATH)
 
 model = resnet_medmnist.__dict__[cfg.MODEL.ARCH]().cuda()
-state_dict = utils.single_model(checkpoint["state_dict"])
+
+#medmnist
+state_dict = utils.single_model(checkpoint["train_model"])
 for k in list(state_dict.keys()):
-    if k.startswith('encoder_k'):
+    if k.startswith('fc'):
         del state_dict[k]
-state_dict = {k.replace("encoder_q.", ""): v for k, v in state_dict.items()}
-state_dict = {k.replace("fc.2.", "fc.1."): v for k, v in state_dict.items()}
+# state_dict = utils.single_model(checkpoint["state_dict"])
+# for k in list(state_dict.keys()):
+#     if k.startswith('encoder_k'):
+#         del state_dict[k]
+# state_dict = {k.replace("encoder_q.", ""): v for k, v in state_dict.items()}
+# state_dict = {k.replace("fc.2.", "fc.1."): v for k, v in state_dict.items()}
 
 mismatch = model.load_state_dict(state_dict, strict=False)
 
@@ -105,3 +111,9 @@ for kMeans_seed in cfg.USL.SEEDS:
     print("Number of selected indices:", len(selected_inds))
     print("Selected IDs:")
     print(repr(selected_inds))
+    
+    # 为了获取spice中训练时相同的reliable label格式
+    fine_tune = np.full(len(targetnp), -100)
+    fine_tune[selected_inds] = targetnp[selected_inds]
+    save_filename = "reliable_bloodmnist_{}_{}.npy".format(final_sample_num,kMeans_seed)
+    np.save(save_filename, fine_tune)

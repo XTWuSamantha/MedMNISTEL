@@ -12,7 +12,7 @@ from medmnist import INFO, Evaluator
 import torch
 import numpy as np
 
-utils.init(default_config_file="configs/DermaMNIST_random.yaml")
+utils.init(default_config_file="configs/BloodMNIST_random.yaml")
 
 logger.info(cfg)
 
@@ -33,7 +33,7 @@ num_classes = len(info['label'])
 # targets = torch.tensor(train_memory_dataset.targets)
 # targets.shape
 
-train_memory_dataset, train_memory_loader = utils.train_memory_medmnist(
+train_memory_dataset, train_memory_loader = utils.train_memory_medmnist(dataname=cfg.DATASET.NAME,
     batch_size=cfg.DATALOADER.BATCH_SIZE,
     workers=cfg.DATALOADER.WORKERS, transform_name=cfg.DATASET.TRANSFORM_NAME)
 
